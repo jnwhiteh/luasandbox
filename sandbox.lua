@@ -22,6 +22,7 @@ local os = {
 	difftime = genv.os.difftime,
 	clock = genv.os.clock,
 }
+local os_exit = genv.os.exit
 local string = genv.string
 local table = genv.table
 local type = genv.type
@@ -231,20 +232,20 @@ local function main()
 	local file = open(filename, "r")
 	if type(file) ~= "userdata" then
 		print("ERR:Unexpected error running sandboxed code: file error")
-		os.exit(1)
+		os_exit(1)
 	end
 
 	local script,err = file:read("*all")
 	if type(err) ~= "nil" then
 		print("ERR:Unexpected error running sandbox code: read error")
-		os.exit(1)
+		os_exit(1)
 	end
 
 	local func,err = loadstring(script, "=weblua")
 	if type(func) ~= "function" then
 		-- We officially have nothing to run, bail out with the first error
 		print("ERR:" .. tostring(err))
-		os.exit(1)
+		os_exit(1)
 	else
 		-- Create a capture table to get any new globals set by the script
 		local new_globals = {}
