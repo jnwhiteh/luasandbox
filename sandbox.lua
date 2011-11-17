@@ -3,11 +3,16 @@
 -- bash shell.  It provides a very simple sandbox that doesn't have any
 -- persistent state.  This is intentional.
 
+local optrequire = function(...)
+	local success, lib = pcall(require, ...)
+	if(success) then return lib end
+end
+
 -- Grab the filename from the genv, so we have it available
 local filename = arg[1]
 local session = arg[2]
-local luarocks = require("luarocks.require")
-local pluto = require("pluto")
+local luarocks = optrequire("luarocks.require")
+local pluto = optrequire("pluto")
 
 -- Save what we need to have access to in order to run
 local genv = getfenv(0)
@@ -17,7 +22,8 @@ local os = {
 	difftime = genv.os.difftime,
 	clock = genv.os.clock,
 }
-local string = genv.string 
+local os_exit = genv.os.exit
+local string = genv.string
 local table = genv.table
 local type = genv.type
 local print = genv.print
@@ -73,7 +79,7 @@ local function expose(tbl)
 end
 
 expose{
-	"assert",			
+	"assert",
 	"collectgarbage",		-- Should be safe in our throwaway environment, due to ulimit
 	"error",
 	"getfenv",				-- We should be fine with this, since they can't outside of it
@@ -180,7 +186,7 @@ local function capture(...)
 			tbl[i] = item
 		end
 	end
-	
+
 	return tbl
 end
 
@@ -226,38 +232,40 @@ local function main()
 	local file = open(filename, "r")
 	if type(file) ~= "userdata" then
 		print("ERR:Unexpected error running sandboxed code: file error")
-		os.exit(1)
+		os_exit(1)
 	end
 
 	local script,err = file:read("*all")
 	if type(err) ~= "nil" then
 		print("ERR:Unexpected error running sandbox code: read error")
-		os.exit(1)
+		os_exit(1)
 	end
 
 	local func,err = loadstring(script, "=weblua")
 	if type(func) ~= "function" then
 		-- We officially have nothing to run, bail out with the first error
 		print("ERR:" .. tostring(err))
-		os.exit(1)
+		os_exit(1)
 	else
-		-- Create a capture table to get any new globals set by the script
-		local new_globals = {}
-		function genv_mt.__newindex(t,k,v)
-			rawset(new_globals, k, v)
-			rawset(t, k, v)
-		end
-
-		-- Load any persistent state that has been saved
-		local file = open("/tmp/webluasession-"..session, "r")
-		if file then
-			local env = select(2, pcall(pluto.unpersist, no_persist, file:read("*all")))
-			if type(env) == "table" then
-				for k,v in pairs(env) do
-					genv[k] = v
-				end
+		if(pluto) then
+			-- Create a capture table to get any new globals set by the script
+			local new_globals = {}
+			function genv_mt.__newindex(t,k,v)
+				rawset(new_globals, k, v)
+				rawset(t, k, v)
 			end
-			file:close()
+
+			-- Load any persistent state that has been saved
+			local file = open("/tmp/webluasession-"..session, "r")
+			if file then
+				local env = select(2, pcall(pluto.unpersist, no_persist, file:read("*all")))
+				if type(env) == "table" then
+					for k,v in pairs(env) do
+						genv[k] = v
+					end
+				end
+				file:close()
+			end
 		end
 
 		-- Run this script, and hope it prints something
@@ -266,26 +274,28 @@ local function main()
 			local stack = traceback()
 			stack = stack:gsub("%S+sputnik%-weblua[^\n]+%s+", "")
 			stack = stack:gsub("%s+%[C%]: in function 'xpcall'.+$", "")
-			return "<pre>" .. tostring(msg) .. "<br/>" .. stack .. "</pre>" 
+			return "<pre>" .. tostring(msg) .. "<br/>" .. stack .. "</pre>"
 		end
 
 		local results = capture(xpcall(func, handler))
 		if results[1] then
 			-- pcall ran successfully, output any results
 
-			-- For everything in new_globals, update those values
-			for k,v in pairs(new_globals) do
-				rawset(new_globals, k, genv[k])
-			end
-
-			-- Save the state out to a session file
-			local file = open("/tmp/webluasession-"..session, "w+")
-			if file then
-				local buf = select(2, pcall(pluto.persist, no_persist, new_globals))
-				if type(buf) == "string" and #buf < (500 * 1024) then
-					file:write(buf)
+			if(pluto) then
+				-- For everything in new_globals, update those values
+				for k,v in pairs(new_globals) do
+					rawset(new_globals, k, genv[k])
 				end
-				file:close()
+
+				-- Save the state out to a session file
+				local file = open("/tmp/webluasession-"..session, "w+")
+				if file then
+					local buf = select(2, pcall(pluto.persist, no_persist, new_globals))
+					if type(buf) == "string" and #buf < (500 * 1024) then
+						file:write(buf)
+					end
+					file:close()
+				end
 			end
 
 			stdout:flush()
