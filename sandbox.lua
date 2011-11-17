@@ -12,7 +12,7 @@ end
 local filename = arg[1]
 local session = arg[2]
 local luarocks = optrequire("luarocks.require")
-local pluto = require("pluto")
+local pluto = optrequire("pluto")
 
 -- Save what we need to have access to in order to run
 local genv = getfenv(0)
@@ -247,23 +247,25 @@ local function main()
 		print("ERR:" .. tostring(err))
 		os_exit(1)
 	else
-		-- Create a capture table to get any new globals set by the script
-		local new_globals = {}
-		function genv_mt.__newindex(t,k,v)
-			rawset(new_globals, k, v)
-			rawset(t, k, v)
-		end
-
-		-- Load any persistent state that has been saved
-		local file = open("/tmp/webluasession-"..session, "r")
-		if file then
-			local env = select(2, pcall(pluto.unpersist, no_persist, file:read("*all")))
-			if type(env) == "table" then
-				for k,v in pairs(env) do
-					genv[k] = v
-				end
+		if(pluto) then
+			-- Create a capture table to get any new globals set by the script
+			local new_globals = {}
+			function genv_mt.__newindex(t,k,v)
+				rawset(new_globals, k, v)
+				rawset(t, k, v)
 			end
-			file:close()
+
+			-- Load any persistent state that has been saved
+			local file = open("/tmp/webluasession-"..session, "r")
+			if file then
+				local env = select(2, pcall(pluto.unpersist, no_persist, file:read("*all")))
+				if type(env) == "table" then
+					for k,v in pairs(env) do
+						genv[k] = v
+					end
+				end
+				file:close()
+			end
 		end
 
 		-- Run this script, and hope it prints something
@@ -279,19 +281,21 @@ local function main()
 		if results[1] then
 			-- pcall ran successfully, output any results
 
-			-- For everything in new_globals, update those values
-			for k,v in pairs(new_globals) do
-				rawset(new_globals, k, genv[k])
-			end
-
-			-- Save the state out to a session file
-			local file = open("/tmp/webluasession-"..session, "w+")
-			if file then
-				local buf = select(2, pcall(pluto.persist, no_persist, new_globals))
-				if type(buf) == "string" and #buf < (500 * 1024) then
-					file:write(buf)
+			if(pluto) then
+				-- For everything in new_globals, update those values
+				for k,v in pairs(new_globals) do
+					rawset(new_globals, k, genv[k])
 				end
-				file:close()
+
+				-- Save the state out to a session file
+				local file = open("/tmp/webluasession-"..session, "w+")
+				if file then
+					local buf = select(2, pcall(pluto.persist, no_persist, new_globals))
+					if type(buf) == "string" and #buf < (500 * 1024) then
+						file:write(buf)
+					end
+					file:close()
+				end
 			end
 
 			stdout:flush()
