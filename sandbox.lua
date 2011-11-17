@@ -3,10 +3,15 @@
 -- bash shell.  It provides a very simple sandbox that doesn't have any
 -- persistent state.  This is intentional.
 
+local optrequire = function(...)
+	local success, lib = pcall(require, ...)
+	if(success) then return lib end
+end
+
 -- Grab the filename from the genv, so we have it available
 local filename = arg[1]
 local session = arg[2]
-local luarocks = require("luarocks.require")
+local luarocks = optrequire("luarocks.require")
 local pluto = require("pluto")
 
 -- Save what we need to have access to in order to run
