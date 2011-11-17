@@ -17,7 +17,7 @@ local os = {
 	difftime = genv.os.difftime,
 	clock = genv.os.clock,
 }
-local string = genv.string 
+local string = genv.string
 local table = genv.table
 local type = genv.type
 local print = genv.print
@@ -73,7 +73,7 @@ local function expose(tbl)
 end
 
 expose{
-	"assert",			
+	"assert",
 	"collectgarbage",		-- Should be safe in our throwaway environment, due to ulimit
 	"error",
 	"getfenv",				-- We should be fine with this, since they can't outside of it
@@ -180,7 +180,7 @@ local function capture(...)
 			tbl[i] = item
 		end
 	end
-	
+
 	return tbl
 end
 
@@ -266,7 +266,7 @@ local function main()
 			local stack = traceback()
 			stack = stack:gsub("%S+sputnik%-weblua[^\n]+%s+", "")
 			stack = stack:gsub("%s+%[C%]: in function 'xpcall'.+$", "")
-			return "<pre>" .. tostring(msg) .. "<br/>" .. stack .. "</pre>" 
+			return "<pre>" .. tostring(msg) .. "<br/>" .. stack .. "</pre>"
 		end
 
 		local results = capture(xpcall(func, handler))
